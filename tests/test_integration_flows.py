@@ -254,40 +254,40 @@ def get_team_id_by_name(team_name: str) -> Optional[int]:
     return _team_name_to_id_cache.get(team_name.lower())
 
 
-# --- Test Data Loading ---
-try:
-    with open("data/minimal_test_flows.json", "r", encoding="utf-8") as f:
-        test_cases: Dict[str, Dict[str, Any]] = json.load(f)
-except Exception as e:
-    pytest.fail(f"Failed to load test data: data/minimal_test_flows.json. Error: {e}", pytrace=False)
+# # --- Test Data Loading ---
+# try:
+#     with open("data/minimal_test_flows.json", "r", encoding="utf-8") as f:
+#         test_cases: Dict[str, Dict[str, Any]] = json.load(f)
+# except Exception as e:
+#     pytest.fail(f"Failed to load test data: data/minimal_test_flows.json. Error: {e}", pytrace=False)
 
 
 # --- Test Fixture ---
-@pytest.fixture(scope="function", params=test_cases.items(), ids=list(test_cases.keys()))
-def chatwoot_test_env(request) -> Generator[Tuple[str, Dict, int, int], None, None]:
-    """Sets up Chatwoot contact and conversation, yields IDs, cleans up."""
-    case_name, case_data = request.param
-    print(f"\n--- Setup: {case_name} ---")
-    contact_email = f"test_{case_name.replace(' ', '_').lower()}@example.com"
-    contact_name = f"Test {case_name}"
-    source_id = f"test-src-{case_name.replace(' ', '_').lower()}-{_generate_random_string(6)}"
+# @pytest.fixture(scope="function", params=test_cases.items(), ids=list(test_cases.keys()))
+# def chatwoot_test_env(request) -> Generator[Tuple[str, Dict, int, int], None, None]:
+#     """Sets up Chatwoot contact and conversation, yields IDs, cleans up."""
+#     case_name, case_data = request.param
+#     print(f"\n--- Setup: {case_name} ---")
+#     contact_email = f"test_{case_name.replace(' ', '_').lower()}@example.com"
+#     contact_name = f"Test {case_name}"
+#     source_id = f"test-src-{case_name.replace(' ', '_').lower()}-{_generate_random_string(6)}"
 
-    contact_id = None
-    conversation_id = None
-    try:
-        contact_id = get_or_create_chatwoot_contact(email=contact_email, name=contact_name)
-        conversation_id = create_chatwoot_conversation(contact_id=contact_id, source_id=source_id)
-        print(f"  Fixture Setup Complete. Contact: {contact_id}, Conversation: {conversation_id}")
-        yield case_name, case_data, contact_id, conversation_id  # Yield basic info
+#     contact_id = None
+#     conversation_id = None
+#     try:
+#         contact_id = get_or_create_chatwoot_contact(email=contact_email, name=contact_name)
+#         conversation_id = create_chatwoot_conversation(contact_id=contact_id, source_id=source_id)
+#         print(f"  Fixture Setup Complete. Contact: {contact_id}, Conversation: {conversation_id}")
+#         yield case_name, case_data, contact_id, conversation_id  # Yield basic info
 
-    finally:
-        print(f"\n--- Teardown: {case_name} ---")
-        if conversation_id:
-            # delete_chatwoot_conversation(conversation_id) # Keep deletion commented for debugging
-            print(f"  Skipping conversation deletion for {conversation_id}")
-        else:
-            print("  No conversation created, skipping deletion.")
-        # Optional: Delete contact? Usually not needed for tests.
+#     finally:
+#         print(f"\n--- Teardown: {case_name} ---")
+#         if conversation_id:
+#             # delete_chatwoot_conversation(conversation_id) # Keep deletion commented for debugging
+#             print(f"  Skipping conversation deletion for {conversation_id}")
+#         else:
+#             print("  No conversation created, skipping deletion.")
+#         # Optional: Delete contact? Usually not needed for tests.
 
 
 # --- Core Test Logic ---

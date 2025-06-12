@@ -55,7 +55,7 @@ def test_conversation_id():
 def wait_for_service():
     """Fixture to wait for a service to be available"""
 
-    async def _wait(check_func, timeout=60, interval=2):
+    async def _wait(check_func, timeout=5, interval=2):
         """
         Wait for a service to be available
 

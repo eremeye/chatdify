@@ -25,7 +25,8 @@ from app.config import (
     TEAM_CACHE_TTL_HOURS,
 )
 from app.database import create_db_tables, get_db
-from app.models.database import ChatwootWebhook, Dialogue, DialogueCreate
+from app.db.models import Dialogue
+from app.models.non_database import ChatwootWebhook, DialogueCreate
 from app.models.non_database import ConversationPriority, ConversationStatus
 
 logger = logging.getLogger(__name__)

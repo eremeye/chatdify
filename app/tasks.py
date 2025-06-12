@@ -12,7 +12,8 @@ from app.config import (
     BOT_ERROR_MESSAGE_INTERNAL,
 )
 from app.database import SessionLocal
-from app.models.database import Dialogue, DifyResponse
+from app.db.models import Dialogue
+from app.models.non_database import DifyResponse
 from app.utils.sentry import init_sentry
 
 load_dotenv()

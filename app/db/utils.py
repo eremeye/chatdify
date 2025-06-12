@@ -4,6 +4,9 @@ from sqlmodel import SQLModel
 from .base import Base
 from .session import sync_engine
 
+# Import models to register them with the metadata
+import app.db.models  # noqa: F401
+
 
 def create_tables():
     """

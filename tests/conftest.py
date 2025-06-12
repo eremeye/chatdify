@@ -7,6 +7,7 @@ from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 
 from app.api.chatwoot import ChatwootHandler
+from app.db.base import Base
 from app.config import CHATWOOT_ACCOUNT_ID, CHATWOOT_API_KEY, CHATWOOT_API_URL
 
 # Load environment variables
@@ -25,8 +26,13 @@ def test_engine():
 
 @pytest.fixture(scope="session")
 def create_tables(test_engine):
+    # Import models to register them with metadata
+    import app.db.models  # noqa: F401
+    
     SQLModel.metadata.create_all(test_engine)
+    Base.metadata.create_all(test_engine)
     yield
+    Base.metadata.drop_all(test_engine)
     SQLModel.metadata.drop_all(test_engine)
 
 

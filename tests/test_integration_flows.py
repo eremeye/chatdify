@@ -377,13 +377,13 @@ def poll_for_bot_response(conversation_id: int, initial_message_count: int) -> b
     return False
 
 
-def verify_bridge_dialogue_exists(chatwoot_conversation_id: int):
+def verify_bridge_conversation_exists(chatwoot_conversation_id: int):
     """
-    Checks the bridge API to confirm a dialogue record exists and has a Dify ID.
-    Logs the status found in the dialogue record.
+    Checks the bridge API to confirm a conversation record exists and has a Dify ID.
+    Logs the status found in the conversation record.
     """
-    print(f"  --- Verifying Bridge Dialogue Existence (Max Wait: {config.DIFY_CHECK_WAIT_TIME}s) ---")
-    check_url = f"{BRIDGE_URL}/dialogue-info/{chatwoot_conversation_id}"
+    print(f"  --- Verifying Bridge Conversation Existence (Max Wait: {config.DIFY_CHECK_WAIT_TIME}s) ---")
+    check_url = f"{BRIDGE_URL}/conversation-info/{chatwoot_conversation_id}"
     start_time = time.time()
 
     while time.time() - start_time < config.DIFY_CHECK_WAIT_TIME:
@@ -399,25 +399,25 @@ def verify_bridge_dialogue_exists(chatwoot_conversation_id: int):
                     if dify_id:
                         waited = time.time() - start_time
                         print(
-                            f"    >>> Bridge Dialogue FOUND after {waited:.1f}s."
+                            f"    >>> Bridge Conversation FOUND after {waited:.1f}s."
                             f" Dify ID: '{dify_id}', Status: '{status}'"
                         )
                         return  # Success!
                     else:
-                        print(f"    Dialogue found, but Dify ID is missing. Status: '{status}'. Retrying...")
+                        print(f"    Conversation found, but Dify ID is missing. Status: '{status}'. Retrying...")
 
                 elif response.status_code == 404:
-                    print("    Dialogue not found yet (404). Retrying...")
+                    print("    Conversation not found yet (404). Retrying...")
                 else:
                     # Log unexpected errors but continue polling
-                    print(f"    WARNING: Unexpected status {response.status_code} checking dialogue info. Retrying...")
+                    print(f"    WARNING: Unexpected status {response.status_code} checking conversation info. Retrying...")
                     print(f"    Response: {response.text[:200]}...")
 
         except httpx.RequestError as e:
-            print(f"    WARNING: Network error checking dialogue info: {e}. Retrying...")
+            print(f"    WARNING: Network error checking conversation info: {e}. Retrying...")
         except Exception as e:
             # Catch broader errors during check
-            print(f"    WARNING: Error during Bridge Dialogue check: {type(e).__name__} - {e}. Retrying...")
+            print(f"    WARNING: Error during Bridge Conversation check: {type(e).__name__} - {e}. Retrying...")
 
         time.sleep(config.DIFY_CHECK_POLL_INTERVAL)
 
@@ -523,7 +523,7 @@ async def test_conversation_flow(chatwoot_test_env):
 
             # --- Verification after FIRST user message ---
             if i == 0:
-                verify_bridge_dialogue_exists(conversation_id)  # Use the renamed function
+                verify_bridge_conversation_exists(conversation_id)  # Use the renamed function
             # --- End verification ---
 
             # Poll for bot response if baseline count is reliable

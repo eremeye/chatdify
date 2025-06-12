@@ -8,10 +8,10 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.db.base import Base
 
 
-class Dialogue(Base):
-    """Dialogue table model using SQLAlchemy 2 with dataclass mapping."""
+class Conversation(Base):
+    """Conversation table model using SQLAlchemy 2 with dataclass mapping."""
     
-    __tablename__ = "dialogue"
+    __tablename__ = "conversation"
     
     id: Mapped[Optional[int]] = mapped_column(primary_key=True, init=False)
     chatwoot_conversation_id: Mapped[str] = mapped_column(index=True)

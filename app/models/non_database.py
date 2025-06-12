@@ -19,7 +19,7 @@ class ConversationStatus(str, Enum):
 
 
 # Data models for validation and creation (using Pydantic instead of SQLModel)
-class DialogueCreate(BaseModel):
+class ConversationCreate(BaseModel):
     chatwoot_conversation_id: str
     status: str = "pending"
     assignee_id: Optional[int] = None
@@ -108,8 +108,8 @@ class ChatwootWebhook(BaseModel):
         """Get sender type"""
         return self.sender.type if self.sender else None
 
-    def to_dialogue_create(self) -> DialogueCreate:
-        return DialogueCreate(
+    def to_conversation_create(self) -> ConversationCreate:
+        return ConversationCreate(
             chatwoot_conversation_id=str(self.conversation_id),
             status=self.status or "pending",
             assignee_id=self.assignee_id,

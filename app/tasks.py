@@ -12,7 +12,7 @@ from app.config import (
     BOT_ERROR_MESSAGE_INTERNAL,
 )
 from app.database import SessionLocal
-from app.db.models import Dialogue
+from app.db.models import Conversation
 from app.models.non_database import DifyResponse
 from app.utils.sentry import init_sentry
 
@@ -88,16 +88,16 @@ def make_dify_request(url: str, data: dict, headers: dict) -> dict:
         return response.json()
 
 
-# Helper function to update dialogue in DB (synchronous)
-def update_dialogue_dify_id_sync(chatwoot_convo_id: str, new_dify_id: str):
+# Helper function to update conversation in DB (synchronous)
+def update_conversation_dify_id_sync(chatwoot_convo_id: str, new_dify_id: str):
     logger.info(f"Attempting to update dify_conversation_id for chatwoot_convo_id={chatwoot_convo_id} to {new_dify_id}")
     with SessionLocal() as db:  # Use synchronous session
         try:
-            # Query dialogue based on chatwoot_conversation_id
-            dialogue = db.query(Dialogue).filter_by(chatwoot_conversation_id=chatwoot_convo_id).first()
-            if dialogue:
-                if not dialogue.dify_conversation_id:  # Update only if it's not already set
-                    dialogue.dify_conversation_id = new_dify_id
+            # Query conversation based on chatwoot_conversation_id
+            conversation = db.query(Conversation).filter_by(chatwoot_conversation_id=chatwoot_convo_id).first()
+            if conversation:
+                if not conversation.dify_conversation_id:  # Update only if it's not already set
+                    conversation.dify_conversation_id = new_dify_id
                     db.commit()
                     logger.info(f"Successfully updated dify_conversation_id for chatwoot_convo_id={chatwoot_convo_id}")
                 else:
@@ -106,7 +106,7 @@ def update_dialogue_dify_id_sync(chatwoot_convo_id: str, new_dify_id: str):
                     )
             else:
                 logger.error(
-                    f"Dialogue record not found for chatwoot_conversation_id={chatwoot_convo_id} during update attempt."
+                    f"Conversation record not found for chatwoot_conversation_id={chatwoot_convo_id} during update attempt."
                 )
         except Exception as e:
             logger.error(
@@ -181,7 +181,7 @@ def process_message_with_dify(
                 if new_dify_id:
                     logger.info(f"New Dify conversation created: {new_dify_id}. Updating database.")
                     # Update DB synchronously within the task
-                    update_dialogue_dify_id_sync(chatwoot_conversation_id, new_dify_id)
+                    update_conversation_dify_id_sync(chatwoot_conversation_id, new_dify_id)
                 else:
                     # --- MODIFIED: Error log and retry ---
                     error_msg = (
@@ -330,12 +330,12 @@ def process_message_with_dify(
 
 
 @celery.task(name="app.tasks.handle_dify_response")
-def handle_dify_response(dify_result: Dict[str, Any], conversation_id: int, dialogue_id: int):
+def handle_dify_response(dify_result: Dict[str, Any], conversation_id: int):
     """Handle the response from Dify"""
 
     chatwoot = ChatwootHandler()
 
-    # No need to update dialogue here anymore, it's done in process_message_with_dify if needed.
+    # No need to update conversation here anymore, it's done in process_message_with_dify if needed.
     # We still need the DifyResponse model for validation/extraction.
     try:
         dify_response_data = DifyResponse(**dify_result)

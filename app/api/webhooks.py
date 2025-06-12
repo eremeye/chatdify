@@ -25,8 +25,8 @@ from app.config import (
     TEAM_CACHE_TTL_HOURS,
 )
 from app.database import create_db_tables, get_db
-from app.db.models import Dialogue
-from app.models.non_database import ChatwootWebhook, DialogueCreate
+from app.db.models import Conversation
+from app.models.non_database import ChatwootWebhook, ConversationCreate
 from app.models.non_database import ConversationPriority, ConversationStatus
 
 logger = logging.getLogger(__name__)
@@ -40,28 +40,28 @@ team_cache_lock = asyncio.Lock() if ENABLE_TEAM_CACHE else None
 last_update_time = 0
 
 
-async def get_or_create_dialogue(db: AsyncSession, data: DialogueCreate) -> Dialogue:
+async def get_or_create_conversation(db: AsyncSession, data: ConversationCreate) -> Conversation:
     """
-    Get existing dialogue or create a new one.
-    Updates the dialogue if it exists with new data.
+    Get existing conversation or create a new one.
+    Updates the conversation if it exists with new data.
     """
-    statement = select(Dialogue).where(Dialogue.chatwoot_conversation_id == data.chatwoot_conversation_id)
+    statement = select(Conversation).where(Conversation.chatwoot_conversation_id == data.chatwoot_conversation_id)
     result = await db.execute(statement)
-    dialogue = result.scalar_one_or_none()
+    conversation = result.scalar_one_or_none()
 
-    if dialogue:
-        # Update existing dialogue with new data
+    if conversation:
+        # Update existing conversation with new data
         for field, value in data.model_dump(exclude_unset=True).items():
-            setattr(dialogue, field, value)
-        dialogue.updated_at = datetime.now(UTC)
+            setattr(conversation, field, value)
+        conversation.updated_at = datetime.now(UTC)
     else:
-        # Create new dialogue
-        dialogue = Dialogue(**data.model_dump())
-        db.add(dialogue)
+        # Create new conversation
+        conversation = Conversation(**data.model_dump())
+        db.add(conversation)
 
     await db.commit()
-    await db.refresh(dialogue)
-    return dialogue
+    await db.refresh(conversation)
+    return conversation
 
 
 @router.post("/send-chatwoot-message")
@@ -123,8 +123,8 @@ async def chatwoot_webhook(
         if True:  # we'll see if we need to filter by status later
             print(f"Processing message: {webhook_data}")
             try:
-                dialogue_data = webhook_data.to_dialogue_create()
-                dialogue = await get_or_create_dialogue(db, dialogue_data)
+                conversation_data = webhook_data.to_conversation_create()
+                conversation = await get_or_create_conversation(db, conversation_data)
 
                 # Just start the task and return immediately
 
@@ -132,14 +132,13 @@ async def chatwoot_webhook(
                 tasks.process_message_with_dify.apply_async(
                     args=[
                         webhook_data.content,
-                        dialogue.dify_conversation_id,
-                        dialogue.chatwoot_conversation_id,
-                        dialogue.status,
+                        conversation.dify_conversation_id,
+                        conversation.chatwoot_conversation_id,
+                        conversation.status,
                         webhook_data.message_type,
                     ],
                     link=tasks.handle_dify_response.s(
                         conversation_id=webhook_data.conversation_id,
-                        dialogue_id=dialogue.id,
                     ),
                     link_error=tasks.handle_dify_error.s(
                         conversation_id=webhook_data.conversation_id,
@@ -167,30 +166,30 @@ async def chatwoot_webhook(
         if not webhook_data.conversation:
             return {"status": "skipped", "reason": "no conversation data"}
 
-        dialogue_data = webhook_data.to_dialogue_create()
-        dialogue = await get_or_create_dialogue(db, dialogue_data)
-        return {"status": "success", "dialogue_id": dialogue.id}
+        conversation_data = webhook_data.to_conversation_create()
+        conversation = await get_or_create_conversation(db, conversation_data)
+        return {"status": "success", "conversation_id": conversation.id}
 
     elif webhook_data.event == "conversation_updated":
         if not webhook_data.conversation:
             return {"status": "skipped", "reason": "no conversation data"}
 
-        dialogue_data = webhook_data.to_dialogue_create()
-        dialogue = await get_or_create_dialogue(db, dialogue_data)
-        return {"status": "success", "dialogue_id": dialogue.id}
+        conversation_data = webhook_data.to_conversation_create()
+        conversation = await get_or_create_conversation(db, conversation_data)
+        return {"status": "success", "conversation_id": conversation.id}
 
     elif webhook_data.event == "conversation_deleted":
         if not webhook_data.conversation:
             return {"status": "skipped", "reason": "no conversation data"}
 
         conversation_id = str(webhook_data.conversation.id)
-        statement = select(Dialogue).where(Dialogue.chatwoot_conversation_id == conversation_id)
-        dialogue = await db.execute(statement)
-        dialogue = dialogue.scalar_one_or_none()
+        statement = select(Conversation).where(Conversation.chatwoot_conversation_id == conversation_id)
+        conversation = await db.execute(statement)
+        conversation = conversation.scalar_one_or_none()
 
-        if dialogue and dialogue.dify_conversation_id:
-            background_tasks.add_task(tasks.delete_dify_conversation, dialogue.dify_conversation_id)
-            await db.delete(dialogue)
+        if conversation and conversation.dify_conversation_id:
+            background_tasks.add_task(tasks.delete_dify_conversation, conversation.dify_conversation_id)
+            await db.delete(conversation)
             await db.commit()
 
     return {"status": "success"}
@@ -318,50 +317,50 @@ async def get_chatwoot_conversation_id(dify_conversation_id: str, db: AsyncSessi
     """
     Get Chatwoot conversation ID from Dify conversation ID
     """
-    statement = select(Dialogue).where(Dialogue.dify_conversation_id == dify_conversation_id)
-    dialogue = await db.execute(statement)
-    dialogue = dialogue.scalar_one_or_none()
+    statement = select(Conversation).where(Conversation.dify_conversation_id == dify_conversation_id)
+    conversation = await db.execute(statement)
+    conversation = conversation.scalar_one_or_none()
 
-    if not dialogue:
+    if not conversation:
         raise HTTPException(
             status_code=404,
             detail=f"No conversation found with Dify ID: {dify_conversation_id}",
         )
 
     return {
-        "chatwoot_conversation_id": dialogue.chatwoot_conversation_id,
-        "status": dialogue.status,
-        "assignee_id": dialogue.assignee_id,
+        "chatwoot_conversation_id": conversation.chatwoot_conversation_id,
+        "status": conversation.status,
+        "assignee_id": conversation.assignee_id,
     }
 
 
-@router.get("/dialogue-info/{chatwoot_conversation_id}")
-async def get_dialogue_info(chatwoot_conversation_id: int, db: AsyncSession = Depends(get_db)):
+@router.get("/conversation-info/{chatwoot_conversation_id}")
+async def get_conversation_info(chatwoot_conversation_id: int, db: AsyncSession = Depends(get_db)):
     """
-    Retrieve dialogue information, including the Dify conversation ID,
+    Retrieve conversation information, including the Dify conversation ID,
     based on the Chatwoot conversation ID. Used for testing/debugging.
     """
-    logger.debug(f"Received request for dialogue info for Chatwoot convo ID: {chatwoot_conversation_id}")
-    statement = select(Dialogue).where(Dialogue.chatwoot_conversation_id == str(chatwoot_conversation_id))
+    logger.debug(f"Received request for conversation info for Chatwoot convo ID: {chatwoot_conversation_id}")
+    statement = select(Conversation).where(Conversation.chatwoot_conversation_id == str(chatwoot_conversation_id))
     result = await db.execute(statement)
-    dialogue = result.scalar_one_or_none()
+    conversation = result.scalar_one_or_none()
 
-    if not dialogue:
-        logger.warning(f"Dialogue not found for Chatwoot convo ID: {chatwoot_conversation_id}")
+    if not conversation:
+        logger.warning(f"Conversation not found for Chatwoot convo ID: {chatwoot_conversation_id}")
         raise HTTPException(
             status_code=404,
-            detail=f"Dialogue not found for Chatwoot conversation ID {chatwoot_conversation_id}",
+            detail=f"Conversation not found for Chatwoot conversation ID {chatwoot_conversation_id}",
         )
 
     logger.debug(
-        f"Found dialogue for Chatwoot convo ID {chatwoot_conversation_id}: Dify ID = {dialogue.dify_conversation_id}"
+        f"Found conversation for Chatwoot convo ID {chatwoot_conversation_id}: Dify ID = {conversation.dify_conversation_id}"
     )
     return {
-        "chatwoot_conversation_id": dialogue.chatwoot_conversation_id,
-        "dify_conversation_id": dialogue.dify_conversation_id,
-        "status": dialogue.status,  # TODO: this probably can be outdated
-        "created_at": dialogue.created_at,
-        "updated_at": dialogue.updated_at,
+        "chatwoot_conversation_id": conversation.chatwoot_conversation_id,
+        "dify_conversation_id": conversation.dify_conversation_id,
+        "status": conversation.status,  # TODO: this probably can be outdated
+        "created_at": conversation.created_at,
+        "updated_at": conversation.updated_at,
     }
 
 

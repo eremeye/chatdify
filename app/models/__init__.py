@@ -1,7 +1,7 @@
 """Database and data models package."""
 
 # Database models (SQLAlchemy 2)
-from app.db.models import Dialogue
+from app.db.models import Conversation
 
 # Non-database models (Pydantic)
 from app.models.non_database import (
@@ -12,15 +12,15 @@ from app.models.non_database import (
     ChatwootWebhook,
     ConversationPriority,
     ConversationStatus,
-    DialogueCreate,
+    ConversationCreate,
     DifyResponse,
 )
 
 __all__ = [
     # Database models
-    "Dialogue",
+    "Conversation",
     # Non-database models
-    "DialogueCreate",
+    "ConversationCreate",
     "ChatwootWebhook",
     "ChatwootSender",
     "ChatwootMeta",

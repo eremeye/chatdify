@@ -5,7 +5,9 @@ description = "A Python connector for integrating Chatwoot with Dify AI"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "fastapi[standard]>=0.115.8",
-    "sqlmodel>=0.0.22",
+    "sqlalchemy[asyncio]>=2.0.25",
+    "alembic>=1.13.0",
+    "pydantic>=2.0.0",
     "httpx>=0.28.1",
     "psycopg2-binary>=2.9.10",
     "python-dotenv>=1.0.1",
@@ -23,6 +25,9 @@ dev = [
     "pytest-asyncio>=0.18.0",
     "pytest-cov>=4.0.0",
     "pytest-dotenv>=0.5.2",
+    "sqlalchemy2-stubs>=0.0.2a38",
+    "mypy>=1.0.0",
+    "sqlmodel>=0.0.22",  # Temporary for existing tests - to be migrated in separate task
 ]
 
 [tool.setuptools]
@@ -35,7 +40,6 @@ build-backend = "setuptools.build_meta"
 [tool.ruff]
 line-length = 120
 target-version = "py312"
-ignore = ["W293"]
 
 [tool.ruff.lint]
 select = [
@@ -45,7 +49,7 @@ select = [
     "I",  # isort
     "B",  # flake8-bugbear
 ]
-ignore = ["B008"]  # fastapi dependency injection needs this
+ignore = ["B008", "W293"]  # fastapi dependency injection needs B008, W293 for trailing whitespace
 
 [tool.ruff.format]
 quote-style = "double"

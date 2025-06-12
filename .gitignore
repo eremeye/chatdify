@@ -58,3 +58,5 @@ coverage.xml
 htmlcov/
 .mypy_cache/
 .ruff_cache/
+
+.cursor/

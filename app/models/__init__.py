@@ -1,1 +1,1 @@
-"""Database and data models package.""" 
+"""Database and data models package."""

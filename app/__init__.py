@@ -1,1 +1,1 @@
-"""Chatdify connector application package.""" 
+"""Chatdify connector application package."""

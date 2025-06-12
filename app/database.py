@@ -1,42 +1,45 @@
+"""
+Legacy database module - migrating to app.db package.
+
+This module provides backward compatibility during the transition to SQLAlchemy 2.
+New code should import from app.db instead.
+"""
 from contextlib import asynccontextmanager, contextmanager
 from typing import AsyncGenerator, Generator
 
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.pool import QueuePool
-from sqlmodel import Session, SQLModel, create_engine
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import Session, SQLModel
 
-from app import config
-
-# Synchronous engine for Celery tasks and migrations
-sync_engine = create_engine(
-    config.DATABASE_URL,
-    poolclass=QueuePool,
-    pool_size=config.DB_POOL_SIZE,
-    max_overflow=config.DB_MAX_OVERFLOW,
-    pool_timeout=config.DB_POOL_TIMEOUT,
-    pool_recycle=config.DB_POOL_RECYCLE,
-    pool_pre_ping=config.DB_POOL_PRE_PING,
-    connect_args={"connect_timeout": 10},  # PostgreSQL specific - connect timeout in seconds
+# Import new infrastructure
+from app.db.session import (
+    async_engine,
+    get_async_session,
+    get_db as _get_db,
+    get_sync_session,
+    sync_engine,
 )
+from app.db.utils import create_db_tables as _create_db_tables
 
-# Async engine for FastAPI endpoints
-# Convert the DATABASE_URL to async URL by replacing postgresql:// with postgresql+asyncpg://
-async_database_url = config.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
-async_engine = create_async_engine(
-    async_database_url,
-    pool_size=config.DB_POOL_SIZE,
-    max_overflow=config.DB_MAX_OVERFLOW,
-    pool_recycle=config.DB_POOL_RECYCLE,
-    pool_pre_ping=config.DB_POOL_PRE_PING,
-    pool_timeout=config.DB_POOL_TIMEOUT,
-)
+# Re-export for backward compatibility
+__all__ = [
+    "sync_engine",
+    "async_engine", 
+    "get_session",
+    "SessionLocal",
+    "get_async_db",
+    "get_db",
+    "create_db_tables",
+]
 
-
-# Sync session for Celery tasks
+# Legacy sync session for Celery tasks - redirect to new implementation
 @contextmanager
 def get_session() -> Generator[Session, None, None]:
-    """Provide a synchronous session for Celery tasks."""
-    with Session(sync_engine) as session:
+    """
+    Provide a synchronous session for Celery tasks.
+    
+    DEPRECATED: Use app.db.session.get_sync_session() instead.
+    """
+    with get_sync_session() as session:
         yield session
 
 
@@ -44,33 +47,33 @@ def get_session() -> Generator[Session, None, None]:
 SessionLocal = get_session
 
 
-# Async session for FastAPI endpoints
+# Legacy async session for FastAPI endpoints - redirect to new implementation
 @asynccontextmanager
 async def get_async_db() -> AsyncGenerator[AsyncSession, None]:
-    """Provide an async database session for FastAPI endpoints."""
-    async with AsyncSession(async_engine) as session:
-        try:
-            yield session
-            await session.commit()
-        except Exception:
-            await session.rollback()
-            raise
+    """
+    Provide an async database session for FastAPI endpoints.
+    
+    DEPRECATED: Use app.db.session.get_async_session() instead.
+    """
+    async with get_async_session() as session:
+        yield session
 
 
-# For FastAPI dependency injection
+# For FastAPI dependency injection - redirect to new implementation
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """FastAPI dependency for async database access."""
-    async with AsyncSession(async_engine) as session:
-        try:
-            yield session
-            await session.commit()
-        except Exception:
-            await session.rollback()
-            raise
+    """
+    FastAPI dependency for async database access.
+    
+    DEPRECATED: Use app.db.session.get_session() instead.
+    """
+    async for session in _get_db():
+        yield session
 
 
 async def create_db_tables():
-    """Create tables asynchronously at startup."""
-    # Use sync_engine for table creation as it's more reliable
-    # SQLModel.metadata.create_all() only works with sync engine
-    SQLModel.metadata.create_all(sync_engine)
+    """
+    Create tables asynchronously at startup.
+    
+    DEPRECATED: Use app.db.utils.create_tables_async() instead.
+    """
+    await _create_db_tables()

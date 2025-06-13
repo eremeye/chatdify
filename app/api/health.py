@@ -1,5 +1,6 @@
 import logging
 import time
+from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import text
@@ -15,26 +16,35 @@ chatwoot = ChatwootHandler()
 
 
 @router.get("", status_code=status.HTTP_200_OK)
-async def health_check():
-    """Health check endpoint for the API."""
+async def health_check() -> Dict[str, Any]:
+    """Health check endpoint for the API using optimized database connection."""
     try:
-        # Proper way to execute SQL with async engine
+        # Use proper async connection pattern with SQLAlchemy 2.x
         async with async_engine.connect() as conn:
             result = await conn.execute(text("SELECT 1"))
-            # Don't await scalar() - it returns the value directly
-            value = result.scalar()  # noqa F841
+            # Fetch the result to ensure connection is working
+            value = result.scalar()
 
-        return {"status": "healthy", "database": "connected", "timestamp": time.time()}
+        return {
+            "status": "healthy", 
+            "database": "connected", 
+            "timestamp": time.time(),
+            "db_value": value
+        }
     except Exception as e:
-        logger.error(f"Failed to create test conversation: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to create test conversation: {str(e)}") from e
+        logger.error(f"Health check failed: {e}")
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Health check failed: {str(e)}"
+        ) from e
 
 
 @router.post("/test-conversation")
-async def create_test_conversation(db: AsyncSession = Depends(get_session)):
+async def create_test_conversation(db: AsyncSession = Depends(get_session)) -> Dict[str, Any]:
     """
     Creates a test conversation in Chatwoot for testing purposes.
     This endpoint is for development and testing only.
+    Uses proper async session management.
     """
     try:
         # Create a test conversation through Chatwoot API
@@ -66,6 +76,7 @@ async def create_test_conversation(db: AsyncSession = Depends(get_session)):
                     "Test message sent to existing conversation Acknowledge receiving by saying `I see a test message`"
                 ),
                 "result": result,
+                "timestamp": time.time(),
             }
         else:
             # In a real implementation, we would create a new conversation here
@@ -73,7 +84,11 @@ async def create_test_conversation(db: AsyncSession = Depends(get_session)):
                 "status": "warning",
                 "message": "No existing conversations found to test with",
                 "note": "Creating new conversations requires additional Chatwoot API endpoints",
+                "timestamp": time.time(),
             }
     except Exception as e:
         logger.error(f"Failed to create test conversation: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to create test conversation: {str(e)}") from e
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Failed to create test conversation: {str(e)}"
+        ) from e

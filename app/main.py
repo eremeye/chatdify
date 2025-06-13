@@ -3,7 +3,7 @@ import os
 
 from fastapi import FastAPI
 
-from app.api import health, webhooks
+from app.api import chatwoot, health, webhooks
 from app.api.webhooks import lifespan
 from app.utils.sentry import init_sentry
 
@@ -26,3 +26,4 @@ app = FastAPI(title="Chatdify", lifespan=lifespan, debug=os.getenv("DEBUG", "Fal
 
 app.include_router(webhooks.router, prefix="/api/v1")
 app.include_router(health.router, prefix="/api/v1/health")
+app.include_router(chatwoot.router, prefix="/api/v1")

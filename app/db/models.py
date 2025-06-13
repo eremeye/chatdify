@@ -13,7 +13,7 @@ class Conversation(Base):
     
     __tablename__ = "conversation"
     
-    id: Mapped[Optional[int]] = mapped_column(primary_key=True, init=False)
+    id: Mapped[int] = mapped_column(primary_key=True, init=False, autoincrement=True)
     chatwoot_conversation_id: Mapped[str] = mapped_column(index=True)
     dify_conversation_id: Mapped[Optional[str]] = mapped_column(default=None)
     status: Mapped[str] = mapped_column(default="pending")

@@ -4,6 +4,7 @@ from typing import Any, Dict, Optional
 import httpx
 from celery import Celery, signals
 from dotenv import load_dotenv
+from sqlalchemy import select
 
 from app import config
 from app.api.chatwoot import ChatwootHandler
@@ -88,13 +89,25 @@ def make_dify_request(url: str, data: dict, headers: dict) -> dict:
         return response.json()
 
 
-# Helper function to update conversation in DB (synchronous)
+# Helper function to update conversation in DB (synchronous with SQLAlchemy 2)
 def update_conversation_dify_id_sync(chatwoot_convo_id: str, new_dify_id: str):
+    """
+    Update the dify_conversation_id for a conversation using sync SQLAlchemy 2 session.
+    
+    Args:
+        chatwoot_convo_id: The Chatwoot conversation ID to search for
+        new_dify_id: The new Dify conversation ID to set
+    """
     logger.info(f"Attempting to update dify_conversation_id for chatwoot_convo_id={chatwoot_convo_id} to {new_dify_id}")
     with get_sync_session() as db:  # Use synchronous session
         try:
-            # Query conversation based on chatwoot_conversation_id
-            conversation = db.query(Conversation).filter_by(chatwoot_conversation_id=chatwoot_convo_id).first()
+            # Use SQLAlchemy 2.x select syntax for sync session
+            statement = select(Conversation).where(
+                Conversation.chatwoot_conversation_id == chatwoot_convo_id
+            )
+            result = db.execute(statement)
+            conversation = result.scalar_one_or_none()
+            
             if conversation:
                 if not conversation.dify_conversation_id:  # Update only if it's not already set
                     conversation.dify_conversation_id = new_dify_id

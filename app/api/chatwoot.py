@@ -1,11 +1,20 @@
+"""Chatwoot API endpoints with SQLAlchemy 2 and Pydantic v2 integration."""
 import logging
 from typing import Any, Dict, List, Optional
 
 import httpx
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
 
 from app import config
+from app.db.session import get_session
+from app.models import Conversation, ConversationCreate, ConversationResponse
 
 logger = logging.getLogger(__name__)
+
+# Create router for Chatwoot API endpoints
+router = APIRouter(prefix="/chatwoot", tags=["chatwoot"])
 
 
 class ChatwootHandler:
@@ -198,7 +207,7 @@ class ChatwootHandler:
                 response.raise_for_status()
                 return response.json()
         except Exception as e:
-            logger.error(f"Failed to assign conversation {conversation_id} to team {team_id or team_name}: {e}")
+            logger.error(f"Failed to assign conversation {conversation_id} to team {team_id}: {e}")
             raise
 
     async def create_custom_attribute_definition(
@@ -209,28 +218,23 @@ class ChatwootHandler:
         description: str = "",
         attribute_model: int = 0,
     ) -> Dict[str, Any]:
-        """Create a new custom attribute definition for conversations or contacts.
+        """Create a custom attribute definition"""
+        url = f"{self.api_url}/platform/accounts/{self.account_id}/custom_attribute_definitions"
 
-        Args:
-            display_name: The display name for the attribute
-            attribute_key: Unique key for the attribute
-            attribute_values: List of possible values for the list-type attribute
-            description: Optional description of the attribute
-            attribute_model: 0 for conversation attribute, 1 for contact attribute
-        """
-        url = f"{self.account_url}/custom_attribute_definitions"
         data = {
-            "attribute_display_name": display_name,
-            "attribute_display_type": 6,  # 6 represents list type
-            "attribute_description": description,
-            "attribute_key": attribute_key,
-            "attribute_values": attribute_values,
-            "attribute_model": attribute_model,
+            "custom_attribute": {
+                "attribute_display_name": display_name,
+                "attribute_key": attribute_key,
+                "attribute_values": attribute_values,
+                "attribute_description": description,
+                "attribute_model": attribute_model,
+                "attribute_display_type": 1,
+            }
         }
 
         try:
             async with httpx.AsyncClient() as client:
-                response = await client.post(url, json=data, headers=self.headers)
+                response = await client.post(url, json=data, headers=self.admin_headers)
                 response.raise_for_status()
                 return response.json()
         except Exception as e:
@@ -244,7 +248,7 @@ class ChatwootHandler:
         previous_status: Optional[str] = None,
         is_error_transition: bool = False,
     ) -> Dict[str, Any]:
-        """Toggle conversation status
+        """Toggle the status of a conversation
         Valid statuses: 'open', 'resolved', 'pending', 'snoozed'
         """
         url = f"{self.conversations_url}/{conversation_id}/toggle_status"
@@ -254,33 +258,18 @@ class ChatwootHandler:
             async with httpx.AsyncClient() as client:
                 response = await client.post(url, json=data, headers=self.headers)
                 response.raise_for_status()
-
-                # Send internal notification if status changed from pending to open
-                # due to an error
-                if status == "open" and previous_status == "pending" and is_error_transition:
+                if response.content and len(response.content.strip()) > 0:
                     try:
-                        logger.info(
-                            f"Conversation {conversation_id} changed from pending to"
-                            "open due to error, sending internal notification."
-                        )
-                        await self.send_message(
-                            conversation_id=conversation_id,
-                            message=config.BOT_ERROR_MESSAGE_INTERNAL,
-                            # Use new internal error message
-                            private=True,
-                        )
-                    except Exception as e_notify:
-                        logger.error(
-                            "Failed to send 'pending to open internal error'"
-                            f"notification for convo {conversation_id}: {e_notify}"
-                        )
-
-                return response.json()
+                        return response.json()
+                    except Exception as json_err:
+                        logger.warning(f"Failed to parse JSON response: {json_err}")
+                        return {}
+                return {}
         except httpx.HTTPStatusError as e:
             logger.error(
-                f"Status update failed for conversation {conversation_id}:\n"
+                f"Status toggle failed for conversation {conversation_id}:\n"
                 f"URL: {url}\nStatus: {e.response.status_code}\n"
-                f"Response: {e.response.text}\nPayload: {data}",
+                f"Response: {e.response.text}\nNew status: {status}",
                 exc_info=True,
             )
             raise
@@ -292,122 +281,210 @@ class ChatwootHandler:
         previous_status: Optional[str] = None,
         is_error_transition: bool = False,
     ) -> Dict[str, Any]:
-        """Toggle conversation status synchronously
-        Valid statuses: 'open', 'resolved', 'pending', 'snoozed'
-        """
+        """Synchronous version of toggle_status for use in Celery tasks"""
+        import httpx
+
         url = f"{self.conversations_url}/{conversation_id}/toggle_status"
         data = {"status": status}
 
         try:
             with httpx.Client() as client:
-                response = client.post(url, json=data, headers=self.headers)
+                response = client.post(url, json=data, headers=self.headers, timeout=30.0)
                 response.raise_for_status()
-
-                # Send internal notification if status changed from pending to open
-                # due to an error
-                if status == "open" and previous_status == "pending" and is_error_transition:
+                if response.content and len(response.content.strip()) > 0:
                     try:
-                        logger.info(
-                            f"Conversation {conversation_id} (sync) changed from pending to open due to error,"
-                            "sending internal notification."
-                        )
-                        self.send_message_sync(
-                            conversation_id=conversation_id,
-                            message=config.BOT_ERROR_MESSAGE_INTERNAL,
-                            private=True,
-                        )
-                    except Exception as e_notify:
-                        logger.error(
-                            "Failed to send 'pending to open internal error' notification (sync)"
-                            f" for convo {conversation_id}: {e_notify}"
-                        )
-
-                return response.json()
+                        return response.json()
+                    except Exception as json_err:
+                        logger.warning(f"Failed to parse JSON response: {json_err}")
+                        return {}
+                return {}
         except httpx.HTTPStatusError as e:
             logger.error(
-                f"Status update failed for conversation {conversation_id}:\n"
+                f"Status toggle (sync) failed for conversation {conversation_id}:\n"
                 f"URL: {url}\nStatus: {e.response.status_code}\n"
-                f"Response: {e.response.text}\nPayload: {data}",
+                f"Response: {e.response.text}\nNew status: {status}",
                 exc_info=True,
             )
             raise
 
     async def get_teams(self) -> List[Dict[str, Any]]:
-        """Fetch all teams from the Chatwoot account.
-
-        Returns:
-            List of team objects with properties like id, name, description, etc.
-        """
+        """Get all teams for the account"""
         url = f"{self.account_url}/teams"
-
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(url, headers=self.admin_headers)
-                response.raise_for_status()
-                return response.json()
-        except httpx.HTTPStatusError as e:
-            logger.error(
-                f"Failed to fetch teams:\nURL: {url}\nStatus: {e.response.status_code}\nResponse: {e.response.text}",
-                exc_info=True,
-            )
-            logger.warning("Resroting to using hardcoded teams")
-            return [
-                {
-                    "id": 3,
-                    "name": "срочная служба",
-                    "description": "",
-                    "allow_auto_assign": True,
-                    "private": False,
-                    "account_id": 1,
-                    "is_member": True,
-                },
-                {
-                    "id": 4,
-                    "name": "консультанты",
-                    "description": "",
-                    "allow_auto_assign": True,
-                    "private": False,
-                    "account_id": 1,
-                    "is_member": True,
-                },
-                {
-                    "id": 5,
-                    "name": "мобилизация",
-                    "description": "",
-                    "allow_auto_assign": True,
-                    "private": False,
-                    "account_id": 1,
-                    "is_member": True,
-                },
-                {
-                    "id": 6,
-                    "name": "дезертиры",
-                    "description": "",
-                    "allow_auto_assign": True,
-                    "private": False,
-                    "account_id": 1,
-                    "is_member": True,
-                },
-            ]
-
-    async def get_conversation_list(self, status: str = "all", assignee_type: str = "all") -> List[Dict[str, Any]]:
-        """Get a list of conversations based on filters.
-
-        Args:
-            status: Filter by conversation status (all, open, resolved, pending)
-            assignee_type: Filter by assignee (all, me, unassigned)
-
-        Returns:
-            List of conversation objects
-        """
-        url = f"{self.conversations_url}?status={status}&assignee_type={assignee_type}"
 
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.get(url, headers=self.headers)
                 response.raise_for_status()
                 data = response.json()
-                return data.get("data", [])
+
+                # Safely extract teams from nested structure
+                if isinstance(data, dict) and "payload" in data:
+                    teams = data["payload"]
+                elif isinstance(data, list):
+                    teams = data
+                else:
+                    teams = []
+
+                logger.info(f"Retrieved {len(teams)} teams from Chatwoot")
+                return teams
+
+        except httpx.HTTPStatusError as e:
+            logger.error(
+                f"Get teams failed:\n"
+                f"URL: {url}\nStatus: {e.response.status_code}\n"
+                f"Response: {e.response.text}",
+                exc_info=True,
+            )
+            return []
+        except Exception as e:
+            logger.error(f"Failed to get teams: {e}")
+            return []
+
+    async def get_conversation_list(self, status: str = "all", assignee_type: str = "all") -> List[Dict[str, Any]]:
+        """Get list of conversations with optional filtering"""
+        url = f"{self.conversations_url}"
+        params = {
+            "status": status,
+            "assignee_type": assignee_type,
+        }
+
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(url, params=params, headers=self.headers)
+                response.raise_for_status()
+                data = response.json()
+
+                # Extract conversations from response
+                if isinstance(data, dict) and "data" in data and "payload" in data["data"]:
+                    conversations = data["data"]["payload"]
+                elif isinstance(data, list):
+                    conversations = data
+                else:
+                    conversations = []
+
+                logger.info(f"Retrieved {len(conversations)} conversations from Chatwoot")
+                return conversations
+
         except Exception as e:
             logger.error(f"Failed to get conversation list: {e}")
-            raise
+            return []
+
+
+# Global handler instance
+chatwoot = ChatwootHandler()
+
+
+# FastAPI endpoints demonstrating new patterns
+
+@router.get("/conversations")
+async def get_conversations(
+    limit: int = Query(default=10, le=100, description="Number of conversations to return"),
+    offset: int = Query(default=0, ge=0, description="Number of conversations to skip"),
+    status: Optional[str] = Query(default=None, description="Filter by conversation status"),
+    db: AsyncSession = Depends(get_session),
+) -> Dict[str, Any]:
+    """
+    Get conversations with proper SQLAlchemy 2.x query optimization and Pydantic v2 serialization.
+    
+    Demonstrates:
+    - SQLAlchemy 2.x select() syntax
+    - Proper pagination
+    - Optional filtering
+    - Pydantic v2 model_validate with from_attributes
+    """
+    # Build query with SQLAlchemy 2.x syntax
+    query = select(Conversation)
+    
+    # Add optional status filter
+    if status:
+        query = query.where(Conversation.status == status)
+    
+    # Add pagination
+    query = query.offset(offset).limit(limit)
+    
+    # For larger datasets with relationships, we would use eager loading:
+    # query = query.options(selectinload(Conversation.messages))  # if we had a messages relationship
+    
+    # Execute query
+    result = await db.execute(query)
+    conversations = result.scalars().all()
+    
+    # Count total for pagination info
+    count_result = await db.execute(select(Conversation).where(
+        Conversation.status == status if status else True
+    ))
+    total = len(count_result.scalars().all())
+    
+    # Use Pydantic v2 model_validate with from_attributes for proper serialization
+    conversation_responses = [
+        ConversationResponse.model_validate(conv, from_attributes=True) 
+        for conv in conversations
+    ]
+    
+    return {
+        "conversations": [conv.model_dump() for conv in conversation_responses],
+        "pagination": {
+            "limit": limit,
+            "offset": offset,
+            "total": total,
+            "has_more": (offset + limit) < total
+        }
+    }
+
+
+@router.get("/conversations/{conversation_id}")
+async def get_conversation(
+    conversation_id: str,
+    db: AsyncSession = Depends(get_session),
+) -> ConversationResponse:
+    """
+    Get a single conversation by ID with optimized query and proper response serialization.
+    
+    Demonstrates:
+    - Single item query optimization
+    - Proper error handling
+    - Pydantic v2 response serialization
+    """
+    # Use SQLAlchemy 2.x select syntax
+    # For relationships, we might use joinedload for 1-to-1 or small 1-to-few:
+    # query = select(Conversation).options(joinedload(Conversation.assignee)).where(...)
+    # Or selectinload for larger child sets:
+    # query = select(Conversation).options(selectinload(Conversation.messages)).where(...)
+    
+    query = select(Conversation).where(Conversation.chatwoot_conversation_id == conversation_id)
+    result = await db.execute(query)
+    conversation = result.scalar_one_or_none()
+    
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    
+    # Use Pydantic v2 model_validate with from_attributes for proper serialization
+    return ConversationResponse.model_validate(conversation, from_attributes=True)
+
+
+@router.post("/conversations")
+async def create_conversation(
+    conversation_data: ConversationCreate,
+    db: AsyncSession = Depends(get_session),
+) -> ConversationResponse:
+    """
+    Create a new conversation with proper Pydantic v2 validation and serialization.
+    
+    Demonstrates:
+    - Pydantic v2 request validation
+    - SQLAlchemy 2.x model creation
+    - Proper response serialization
+    """
+    # Use Pydantic model_dump for safe data extraction
+    conversation_dict = conversation_data.model_dump(exclude={'id'})
+    
+    # Create SQLAlchemy model instance
+    conversation = Conversation(**conversation_dict)
+    
+    # Add and commit
+    db.add(conversation)
+    await db.commit()
+    await db.refresh(conversation)
+    
+    # Use Pydantic v2 model_validate with from_attributes for response
+    return ConversationResponse.model_validate(conversation, from_attributes=True)

@@ -26,8 +26,13 @@ from app.config import (
 )
 from app.database import create_db_tables, get_db
 from app.db.models import Conversation
-from app.models.non_database import ChatwootWebhook, ConversationCreate
-from app.models.non_database import ConversationPriority, ConversationStatus
+from app.schemas import (
+    ChatwootWebhook,
+    ConversationCreate,
+    ConversationPriority,
+    ConversationResponse,
+    ConversationStatus,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -327,10 +332,14 @@ async def get_chatwoot_conversation_id(dify_conversation_id: str, db: AsyncSessi
             detail=f"No conversation found with Dify ID: {dify_conversation_id}",
         )
 
+    # Use ConversationResponse DTO with model_validate
+    response_data = ConversationResponse.model_validate(conversation)
     return {
-        "chatwoot_conversation_id": conversation.chatwoot_conversation_id,
-        "status": conversation.status,
-        "assignee_id": conversation.assignee_id,
+        "chatwoot_conversation_id": response_data.chatwoot_conversation_id,
+        "status": response_data.status,
+        "assignee_id": response_data.assignee_id,
+        "is_assigned": response_data.is_assigned,
+        "has_dify_integration": response_data.has_dify_integration,
     }
 
 
@@ -355,13 +364,10 @@ async def get_conversation_info(chatwoot_conversation_id: int, db: AsyncSession 
     logger.debug(
         f"Found conversation for Chatwoot convo ID {chatwoot_conversation_id}: Dify ID = {conversation.dify_conversation_id}"
     )
-    return {
-        "chatwoot_conversation_id": conversation.chatwoot_conversation_id,
-        "dify_conversation_id": conversation.dify_conversation_id,
-        "status": conversation.status,  # TODO: this probably can be outdated
-        "created_at": conversation.created_at,
-        "updated_at": conversation.updated_at,
-    }
+    
+    # Use ConversationResponse DTO with model_validate for consistent response structure
+    response_data = ConversationResponse.model_validate(conversation)
+    return response_data.model_dump()
 
 
 async def update_team_cache():

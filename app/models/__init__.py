@@ -3,24 +3,30 @@
 # Database models (SQLAlchemy 2)
 from app.db.models import Conversation
 
-# Non-database models (Pydantic)
-from app.models.non_database import (
+# DTO schemas (Pydantic v2) - imported from new schemas package
+from app.schemas import (
     ChatwootConversation,
     ChatwootMessage,
     ChatwootMeta,
     ChatwootSender,
     ChatwootWebhook,
-    ConversationPriority,
-    ConversationStatus,
     ConversationCreate,
+    ConversationCreateRequest,
+    ConversationPriority,
+    ConversationResponse,
+    ConversationStatus,
+    ConversationUpdateRequest,
     DifyResponse,
 )
 
 __all__ = [
     # Database models
     "Conversation",
-    # Non-database models
+    # DTO schemas
     "ConversationCreate",
+    "ConversationCreateRequest",
+    "ConversationResponse",
+    "ConversationUpdateRequest",
     "ChatwootWebhook",
     "ChatwootSender",
     "ChatwootMeta",

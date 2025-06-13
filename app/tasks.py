@@ -13,7 +13,7 @@ from app.config import (
 )
 from app.database import SessionLocal
 from app.db.models import Conversation
-from app.models.non_database import DifyResponse
+from app.schemas import DifyResponse
 from app.utils.sentry import init_sentry
 
 load_dotenv()
@@ -338,10 +338,10 @@ def handle_dify_response(dify_result: Dict[str, Any], conversation_id: int):
     # No need to update conversation here anymore, it's done in process_message_with_dify if needed.
     # We still need the DifyResponse model for validation/extraction.
     try:
-        dify_response_data = DifyResponse(**dify_result)
+        dify_response_data = DifyResponse.model_validate(dify_result)
 
         # Send message back to Chatwoot. Sync is okay because we use separate instance of ChatwootHandler
-        if dify_response_data.answer.strip():
+        if dify_response_data.has_valid_answer():
             chatwoot.send_message_sync(
                 conversation_id=conversation_id,
                 message=dify_response_data.answer,

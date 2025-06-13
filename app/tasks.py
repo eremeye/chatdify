@@ -11,8 +11,8 @@ from app.config import (
     BOT_CONVERSATION_OPENED_MESSAGE_EXTERNAL,
     BOT_ERROR_MESSAGE_INTERNAL,
 )
-from app.database import SessionLocal
 from app.db.models import Conversation
+from app.db.session import get_sync_session
 from app.schemas import DifyResponse
 from app.utils.sentry import init_sentry
 
@@ -91,14 +91,14 @@ def make_dify_request(url: str, data: dict, headers: dict) -> dict:
 # Helper function to update conversation in DB (synchronous)
 def update_conversation_dify_id_sync(chatwoot_convo_id: str, new_dify_id: str):
     logger.info(f"Attempting to update dify_conversation_id for chatwoot_convo_id={chatwoot_convo_id} to {new_dify_id}")
-    with SessionLocal() as db:  # Use synchronous session
+    with get_sync_session() as db:  # Use synchronous session
         try:
             # Query conversation based on chatwoot_conversation_id
             conversation = db.query(Conversation).filter_by(chatwoot_conversation_id=chatwoot_convo_id).first()
             if conversation:
                 if not conversation.dify_conversation_id:  # Update only if it's not already set
                     conversation.dify_conversation_id = new_dify_id
-                    db.commit()
+                    # Note: get_sync_session handles commit automatically
                     logger.info(f"Successfully updated dify_conversation_id for chatwoot_convo_id={chatwoot_convo_id}")
                 else:
                     logger.warning(
@@ -106,14 +106,15 @@ def update_conversation_dify_id_sync(chatwoot_convo_id: str, new_dify_id: str):
                     )
             else:
                 logger.error(
-                    f"Conversation record not found for chatwoot_conversation_id={chatwoot_convo_id} during update attempt."
+                    f"Conversation record not found for chatwoot_conversation_id={chatwoot_convo_id} "
+                    f"during update attempt."
                 )
         except Exception as e:
             logger.error(
                 f"Failed to update dify_conversation_id for chatwoot_convo_id={chatwoot_convo_id}: {e}",
                 exc_info=True,
             )
-            db.rollback()  # Rollback on error
+            # Note: get_sync_session handles rollback automatically on exception
 
 
 @celery.task(bind=True, max_retries=3, default_retry_delay=5)

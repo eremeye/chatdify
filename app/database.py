@@ -8,15 +8,16 @@ from contextlib import asynccontextmanager, contextmanager
 from typing import AsyncGenerator, Generator
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import Session, SQLModel
+from sqlmodel import Session
 
 # Import new infrastructure
 from app.db.session import (
     async_engine,
-    get_async_session,
-    get_db as _get_db,
     get_sync_session,
     sync_engine,
+)
+from app.db.session import (
+    get_session as _get_session,
 )
 from app.db.utils import create_db_tables as _create_db_tables
 
@@ -53,9 +54,9 @@ async def get_async_db() -> AsyncGenerator[AsyncSession, None]:
     """
     Provide an async database session for FastAPI endpoints.
     
-    DEPRECATED: Use app.db.session.get_async_session() instead.
+    DEPRECATED: Use app.db.session.get_session() instead.
     """
-    async with get_async_session() as session:
+    async for session in _get_session():
         yield session
 
 
@@ -66,7 +67,7 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
     
     DEPRECATED: Use app.db.session.get_session() instead.
     """
-    async for session in _get_db():
+    async for session in _get_session():
         yield session
 
 
@@ -74,6 +75,6 @@ async def create_db_tables():
     """
     Create tables asynchronously at startup.
     
-    DEPRECATED: Use app.db.utils.create_tables_async() instead.
+    DEPRECATED: Use app.db.utils.create_db_tables() instead.
     """
     await _create_db_tables()

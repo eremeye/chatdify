@@ -60,17 +60,13 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
     1. Create session
     2. Begin transaction automatically
     3. Yield session
-    4. Handle exceptions with rollback
-    5. Commit on success
+    4. Handle exceptions (rollback handled automatically by session.begin())
+    5. Commit on success (handled automatically by session.begin())
     6. Close session automatically
     """
     async with AsyncSessionLocal() as session:
         async with session.begin():
-            try:
-                yield session
-            except Exception:
-                await session.rollback()
-                raise
+            yield session
 
 
 # Alternative async session context manager
@@ -79,11 +75,7 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
     """Provide an async session context manager for programmatic use."""
     async with AsyncSessionLocal() as session:
         async with session.begin():
-            try:
-                yield session
-            except Exception:
-                await session.rollback()
-                raise
+            yield session
 
 
 # Legacy compatibility functions

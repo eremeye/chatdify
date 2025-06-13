@@ -24,8 +24,9 @@ from app.config import (
     ENABLE_TEAM_CACHE,
     TEAM_CACHE_TTL_HOURS,
 )
-from app.database import create_db_tables, get_db
 from app.db.models import Conversation
+from app.db.session import get_session
+from app.db.utils import create_db_tables
 from app.schemas import (
     ChatwootWebhook,
     ConversationCreate,
@@ -74,7 +75,7 @@ async def send_chatwoot_message(
     conversation_id: int,
     message: str,
     is_private: bool = False,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_session),
 ):
     """
     Send a message to Chatwoot conversation.
@@ -97,7 +98,7 @@ async def send_chatwoot_message(
 async def chatwoot_webhook(
     request: Request,
     background_tasks: BackgroundTasks,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_session),
 ):
     print("Received Chatwoot webhook request")
     payload = await request.json()
@@ -201,7 +202,7 @@ async def chatwoot_webhook(
 
 
 @router.post("/update-labels/{conversation_id}")
-async def update_labels(conversation_id: int, labels: List[str], db: AsyncSession = Depends(get_db)):
+async def update_labels(conversation_id: int, labels: List[str], db: AsyncSession = Depends(get_session)):
     """
     Update labels for a Chatwoot conversation
 
@@ -225,7 +226,7 @@ async def update_labels(conversation_id: int, labels: List[str], db: AsyncSessio
 async def update_custom_attributes(
     conversation_id: int,
     custom_attributes: Dict[str, Any],
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_session),
 ):
     """
     Update custom attributes for a Chatwoot conversation
@@ -275,7 +276,7 @@ async def toggle_conversation_priority(
         embed=True,
         description="Priority level: 'urgent', 'high', 'medium', 'low', or None",
     ),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_session),
 ):
     """
     Toggle the priority of a Chatwoot conversation
@@ -318,7 +319,7 @@ async def toggle_conversation_priority(
 
 
 @router.get("/conversations/dify/{dify_conversation_id}")
-async def get_chatwoot_conversation_id(dify_conversation_id: str, db: AsyncSession = Depends(get_db)):
+async def get_chatwoot_conversation_id(dify_conversation_id: str, db: AsyncSession = Depends(get_session)):
     """
     Get Chatwoot conversation ID from Dify conversation ID
     """
@@ -344,7 +345,7 @@ async def get_chatwoot_conversation_id(dify_conversation_id: str, db: AsyncSessi
 
 
 @router.get("/conversation-info/{chatwoot_conversation_id}")
-async def get_conversation_info(chatwoot_conversation_id: int, db: AsyncSession = Depends(get_db)):
+async def get_conversation_info(chatwoot_conversation_id: int, db: AsyncSession = Depends(get_session)):
     """
     Retrieve conversation information, including the Dify conversation ID,
     based on the Chatwoot conversation ID. Used for testing/debugging.
@@ -449,7 +450,7 @@ async def assign_conversation_to_team(
         embed=True,
         description="Team name to assign the conversation to",
     ),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_session),
 ):
     """
     Assign a Chatwoot conversation to a team
@@ -539,7 +540,7 @@ async def assign_conversation_to_team(
 async def toggle_conversation_status(
     conversation_id: int,
     status: ConversationStatus = Body(..., embed=True),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_session),
 ):
     """
     Toggle the status of a Chatwoot conversation

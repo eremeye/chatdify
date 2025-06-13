@@ -3,10 +3,10 @@ import time
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import text
-from sqlmodel import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.chatwoot import ChatwootHandler
-from app.database import async_engine, get_db
+from app.db.session import async_engine, get_session
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -31,7 +31,7 @@ async def health_check():
 
 
 @router.post("/test-conversation")
-async def create_test_conversation(db: Session = Depends(get_db)):
+async def create_test_conversation(db: AsyncSession = Depends(get_session)):
     """
     Creates a test conversation in Chatwoot for testing purposes.
     This endpoint is for development and testing only.
